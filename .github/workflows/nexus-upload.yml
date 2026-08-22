@@ -1,0 +1,32 @@
+# Carica lo zip su Nexus a ogni release pubblicata su GitHub.
+# La chiave sta nel segreto NEXUS_API_KEY del repo, mai in questo file.
+name: Carica su Nexus
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scarica lo zip dalla release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "VaraModpack-IronNest-*.zip" --dir .
+
+      - name: Ricava il numero di versione dal tag
+        id: ver
+        run: echo "numero=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Carica su Nexus Mods
+        uses: Nexus-Mods/upload-action@main
+        with:
+          api_key: ${{ secrets.NEXUS_API_KEY }}
+          file_group_id: 185
+          filename: VaraModpack-IronNest-${{ steps.ver.outputs.numero }}.zip
+          display_name: VaraModpack IronNest ${{ steps.ver.outputs.numero }}
+          version: ${{ steps.ver.outputs.numero }}
+          file_category: main
+          description: ${{ github.event.release.body }}
+          archive_existing_file: "false"
