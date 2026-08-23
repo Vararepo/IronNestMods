@@ -23,10 +23,10 @@ jobs:
         uses: Nexus-Mods/upload-action@main
         with:
           api_key: ${{ secrets.NEXUS_API_KEY }}
-          file_group_id: 185
+          file_id: 185
           filename: VaraModpack-IronNest-${{ steps.ver.outputs.numero }}.zip
           display_name: VaraModpack IronNest ${{ steps.ver.outputs.numero }}
           version: ${{ steps.ver.outputs.numero }}
-          file_category: main
+          category: main
           description: ${{ github.event.release.body }}
-          archive_existing_file: "false"
+          archive_existing_version: "false"
