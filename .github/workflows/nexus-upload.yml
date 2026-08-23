@@ -1,23 +1,49 @@
 # Carica lo zip su Nexus a ogni release pubblicata su GitHub.
 # La chiave sta nel segreto NEXUS_API_KEY del repo, mai in questo file.
+# workflow_dispatch: permette di rilanciare l'upload a mano per un tag gia'
+# pubblicato (es. se il primo run e' fallito), senza ripubblicare la release.
 name: Carica su Nexus
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag della release da (ri)caricare su Nexus (es. v1.0.8)'
+        required: true
 
 jobs:
   upload:
     runs-on: ubuntu-latest
     steps:
+      - name: Determina il tag
+        id: tag
+        run: echo "tag=${{ github.event.release.tag_name || github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+
       - name: Scarica lo zip dalla release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ github.event.release.tag_name }}" --repo "${{ github.repository }}" --pattern "VaraModpack-IronNest-*.zip" --dir .
+        run: gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --pattern "VaraModpack-IronNest-*.zip" --dir .
+
+      - name: Recupera il changelog della release
+        id: notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="${{ github.event.release.body }}"
+          if [ -z "$body" ]; then
+            body=$(gh release view "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --json body -q .body)
+          fi
+          echo "body<<EOF_NEXUS_BODY" >> "$GITHUB_OUTPUT"
+          echo "$body" >> "$GITHUB_OUTPUT"
+          echo "EOF_NEXUS_BODY" >> "$GITHUB_OUTPUT"
 
       - name: Ricava il numero di versione dal tag
         id: ver
-        run: echo "numero=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: echo "numero=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Carica su Nexus Mods
         uses: Nexus-Mods/upload-action@main
@@ -28,5 +54,5 @@ jobs:
           display_name: VaraModpack IronNest ${{ steps.ver.outputs.numero }}
           version: ${{ steps.ver.outputs.numero }}
           category: main
-          description: ${{ github.event.release.body }}
+          description: ${{ steps.notes.outputs.body }}
           archive_existing_version: "false"
