@@ -2,6 +2,14 @@
 # La chiave sta nel segreto NEXUS_API_KEY del repo, mai in questo file.
 # workflow_dispatch: permette di rilanciare l'upload a mano per un tag gia'
 # pubblicato (es. se il primo run e' fallito), senza ripubblicare la release.
+#
+# Nexus ha DUE campi distinti per un file, alimentati diversamente:
+#  - "description" (mostrato nel pannello del file su Nexus): limite 255
+#    caratteri lato sito. Qui resta un testo fisso, non generato dal
+#    changelog, altrimenti l'API rifiuta/tronca in modo brutto.
+#  - "changelog" (richiede anche "mod_id"): alimenta la sezione Changelogs
+#    storica della pagina descrizione. Una riga per voce, senza limite
+#    stretto: qui ci va il vero "what's new", un paragrafo per riga.
 name: Carica su Nexus
 
 on:
@@ -26,18 +34,48 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --pattern "VaraModpack-IronNest-*.zip" --dir .
 
-      - name: Recupera il changelog della release
+      - name: Estrai il changelog (una riga per paragrafo di "What's new")
         id: notes
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
-          body="${{ github.event.release.body }}"
+          body="$RELEASE_BODY"
           if [ -z "$body" ]; then
             body=$(gh release view "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --json body -q .body)
           fi
-          echo "body<<EOF_NEXUS_BODY" >> "$GITHUB_OUTPUT"
-          echo "$body" >> "$GITHUB_OUTPUT"
-          echo "EOF_NEXUS_BODY" >> "$GITHUB_OUTPUT"
+          changelog=$(BODY="$body" python3 - <<'PYEOF'
+          import os
+          body = os.environ["BODY"]
+          out_paragraphs = []
+          current = []
+          flag = False
+          for line in body.splitlines():
+              if line.startswith("### Changed") or line.startswith("### Fixed") or line.startswith("## What's new"):
+                  flag = True
+                  continue
+              if flag and (line.startswith("### ") or line.startswith("## ")):
+                  break
+              if not flag:
+                  continue
+              stripped = line.strip()
+              if stripped.startswith("–") or stripped.startswith("-"):
+                  # gia' un punto elenco (stile 1.0.5): una riga per voce
+                  out_paragraphs.append(stripped.lstrip("–- ").strip())
+              elif stripped == "":
+                  if current:
+                      out_paragraphs.append(" ".join(current))
+                      current = []
+              else:
+                  current.append(stripped)
+          if current:
+              out_paragraphs.append(" ".join(current))
+          print("\n".join(out_paragraphs))
+          PYEOF
+          )
+          echo "changelog<<EOF_NEXUS_CHANGELOG" >> "$GITHUB_OUTPUT"
+          echo "$changelog" >> "$GITHUB_OUTPUT"
+          echo "EOF_NEXUS_CHANGELOG" >> "$GITHUB_OUTPUT"
 
       - name: Ricava il numero di versione dal tag
         id: ver
@@ -54,5 +92,7 @@ jobs:
           display_name: VaraModpack IronNest ${{ steps.ver.outputs.numero }}
           version: ${{ steps.ver.outputs.numero }}
           category: main
-          description: ${{ steps.notes.outputs.body }}
+          description: "Automatic fire-control room for Iron Nest Heavy Turret Simulator. See the Changelogs tab on this page, or the GitHub release notes, for what's new in this version."
+          changelog: ${{ steps.notes.outputs.changelog }}
+          mod_id: 55
           archive_existing_version: "false"
