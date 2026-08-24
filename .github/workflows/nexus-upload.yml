@@ -94,5 +94,5 @@ jobs:
           category: main
           description: "Automatic fire-control room for Iron Nest Heavy Turret Simulator. See the Changelogs tab on this page, or the GitHub release notes, for what's new in this version."
           changelog: ${{ steps.notes.outputs.changelog }}
-          mod_id: 55
+          mod_id: 40660455391287
           archive_existing_version: "false"
