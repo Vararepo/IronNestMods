@@ -3,6 +3,14 @@
 # workflow_dispatch: permette di rilanciare l'upload a mano per un tag gia'
 # pubblicato (es. se il primo run e' fallito), senza ripubblicare la release.
 #
+# 27/8/2026: su Nexus va lo zip a INSTALLAZIONE MANUALE
+# (VaraModpack-IronNest-<ver>-manuale.zip), NON quello con l'installer .exe
+# dentro. Le linee guida Nexus mandano in revisione manuale ogni file
+# self-extracting e l'installer finiva in quarantena a ogni versione (falso
+# positivo, VirusTotal 0/67), bloccando davvero i download. L'installer .exe
+# resta allegato alla stessa release GitHub e si aggancia alla pagina Nexus
+# dal campo "Mirrors".
+#
 # Nexus ha DUE campi distinti per un file, alimentati diversamente:
 #  - "description" (mostrato nel pannello del file su Nexus): limite 255
 #    caratteri lato sito. Qui resta un testo fisso, non generato dal
@@ -11,7 +19,6 @@
 #    storica della pagina descrizione. Una riga per voce, senza limite
 #    stretto: qui ci va il vero "what's new", un paragrafo per riga.
 name: Carica su Nexus
-
 on:
   release:
     types: [published]
@@ -20,7 +27,6 @@ on:
       tag:
         description: 'Tag della release da (ri)caricare su Nexus (es. v1.0.8)'
         required: true
-
 jobs:
   upload:
     runs-on: ubuntu-latest
@@ -28,12 +34,10 @@ jobs:
       - name: Determina il tag
         id: tag
         run: echo "tag=${{ github.event.release.tag_name || github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-
       - name: Scarica lo zip dalla release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --pattern "VaraModpack-IronNest-*.zip" --dir .
-
+        run: gh release download "${{ steps.tag.outputs.tag }}" --repo "${{ github.repository }}" --pattern "VaraModpack-IronNest-*-manuale.zip" --dir .
       - name: Estrai il changelog (una riga per paragrafo di "What's new")
         id: notes
         env:
@@ -76,23 +80,21 @@ jobs:
           echo "changelog<<EOF_NEXUS_CHANGELOG" >> "$GITHUB_OUTPUT"
           echo "$changelog" >> "$GITHUB_OUTPUT"
           echo "EOF_NEXUS_CHANGELOG" >> "$GITHUB_OUTPUT"
-
       - name: Ricava il numero di versione dal tag
         id: ver
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: echo "numero=${TAG#v}" >> "$GITHUB_OUTPUT"
-
       - name: Carica su Nexus Mods
         uses: Nexus-Mods/upload-action@main
         with:
           api_key: ${{ secrets.NEXUS_API_KEY }}
           file_id: 7825398
-          filename: VaraModpack-IronNest-${{ steps.ver.outputs.numero }}.zip
-          display_name: VaraModpack IronNest ${{ steps.ver.outputs.numero }}
+          filename: VaraModpack-IronNest-${{ steps.ver.outputs.numero }}-manuale.zip
+          display_name: VaraModpack IronNest ${{ steps.ver.outputs.numero }} (manual install)
           version: ${{ steps.ver.outputs.numero }}
           category: main
-          description: "Automatic fire-control room for Iron Nest Heavy Turret Simulator. See the Changelogs tab on this page, or the GitHub release notes, for what's new in this version."
+          description: "Automatic fire-control room for Iron Nest Heavy Turret Simulator. Manual install: unzip into your game folder. Needs MelonLoader 0.7.3. An automatic installer is linked under Mirrors. See the Changelogs tab for what's new."
           changelog: ${{ steps.notes.outputs.changelog }}
           mod_id: 40660455391287
           archive_existing_version: "false"
