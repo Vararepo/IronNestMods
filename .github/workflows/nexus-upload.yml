@@ -95,6 +95,25 @@ jobs:
           print("\n".join(out_paragraphs))
           PYEOF
           )
+          # 28/8/2026: il changelog e' rimasto indietro tre volte senza che nessuno se ne
+          # accorgesse, perche' l'API risponde "Changelog added successfully" anche quando il
+          # contenuto non arriva e questo step non stampava MAI cio' che aveva estratto.
+          # Da qui in poi lo stampa, e il job FALLISCE se e' vuoto o se e' finito tutto in una
+          # voce sola (sintomo delle note in prosa senza righe vuote fra una voce e l'altra).
+          echo "----- changelog estratto -----"
+          echo "$changelog"
+          echo "------------------------------"
+          righe=$(printf '%s\n' "$changelog" | grep -c . || true)
+          lunghezza=$(printf '%s' "$changelog" | wc -c)
+          echo "voci: $righe, caratteri: $lunghezza"
+          if [ "$righe" -eq 0 ] || [ "$lunghezza" -lt 20 ]; then
+            echo "::error::Changelog vuoto: le note della release non hanno una sezione What is new, Changed o Fixed leggibile. Su Nexus finirebbe una voce vuota SENZA errore."
+            exit 1
+          fi
+          if [ "$righe" -eq 1 ] && [ "$lunghezza" -gt 400 ]; then
+            echo "::error::Changelog in una voce sola da $lunghezza caratteri: le note sono in prosa senza righe vuote fra le voci. Su Nexus uscirebbe un muro di testo illeggibile."
+            exit 1
+          fi
           echo "changelog<<EOF_NEXUS_CHANGELOG" >> "$GITHUB_OUTPUT"
           echo "$changelog" >> "$GITHUB_OUTPUT"
           echo "EOF_NEXUS_CHANGELOG" >> "$GITHUB_OUTPUT"
