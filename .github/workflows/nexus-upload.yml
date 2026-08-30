@@ -81,18 +81,23 @@ jobs:
               if not flag:
                   continue
               stripped = line.strip()
-              if stripped.startswith("\u2013") or stripped.startswith("-"):
+              if stripped.startswith("\\u2013") or stripped.startswith("-"):
                   # gia' un punto elenco (stile 1.0.5): una riga per voce
-                  out_paragraphs.append(stripped.lstrip("\u2013- ").strip())
+                  out_paragraphs.append(stripped.lstrip("\\u2013- ").strip())
               elif stripped == "":
                   if current:
                       out_paragraphs.append(" ".join(current))
                       current = []
+              elif out_paragraphs and not current and (line.startswith("  ") or line.startswith("\\t")):
+                  # 30/8/2026: riga di continuazione di un bullet andato a capo. Prima finiva
+                  # nel buffer "current" e le code di bullet diversi si fondevano in una voce
+                  # sola: sulla 1.1.2 il changelog Nexus e' uscito con le voci spezzate a meta'.
+                  out_paragraphs[-1] += " " + stripped
               else:
                   current.append(stripped)
           if current:
               out_paragraphs.append(" ".join(current))
-          print("\n".join(out_paragraphs))
+          print("\\n".join(out_paragraphs))
           PYEOF
           )
           # 28/8/2026: il changelog e' rimasto indietro tre volte senza che nessuno se ne
@@ -103,7 +108,7 @@ jobs:
           echo "----- changelog estratto -----"
           echo "$changelog"
           echo "------------------------------"
-          righe=$(printf '%s\n' "$changelog" | grep -c . || true)
+          righe=$(printf '%s\\n' "$changelog" | grep -c . || true)
           lunghezza=$(printf '%s' "$changelog" | wc -c)
           echo "voci: $righe, caratteri: $lunghezza"
           if [ "$righe" -eq 0 ] || [ "$lunghezza" -lt 20 ]; then
